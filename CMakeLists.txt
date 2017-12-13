@@ -39,6 +39,7 @@ find_package(PCL 1.7 REQUIRED)
 generate_dynamic_reconfigure_options(
   cfg/Laser.cfg
   cfg/Camera.cfg
+  cfg/Monocular.cfg
   cfg/Plane.cfg
 )
 
@@ -88,6 +89,7 @@ add_definitions(
 ## Declare cpp executables
 add_executable(laser_pattern src/laser_pattern.cpp)
 add_executable(stereo_pattern src/stereo_pattern.cpp)
+add_executable(mono_qr_pattern src/mono_qr_pattern.cpp)
 add_executable(velo2cam_calibration src/velo2cam_calibration.cpp)
 add_executable(pcl_coloring src/pcl_coloring.cpp)
 add_executable(pcl_projection src/pcl_projection.cpp)
@@ -109,6 +111,11 @@ add_dependencies(stereo_pattern
   velo2cam_calibration_generate_messages_cpp
   ${PROJECT_NAME}_gencfg
 )
+add_dependencies(mono_qr_pattern
+  ${catkin_EXPORTED_TARGETS}
+  velo2cam_calibration_generate_messages_cpp
+  ${PROJECT_NAME}_gencfg
+)
 add_dependencies(
   velo2cam_calibration
   ${catkin_EXPORTED_TARGETS}
@@ -125,6 +132,11 @@ target_link_libraries(stereo_pattern
   ${PCL_LIBRARIES}
 )
 target_link_libraries(laser_pattern
+  ${catkin_LIBRARIES}
+  ${OpenCV_LIBRARIES}
+  ${PCL_LIBRARIES}
+)
+target_link_libraries(mono_qr_pattern
   ${catkin_LIBRARIES}
   ${OpenCV_LIBRARIES}
   ${PCL_LIBRARIES}
