@@ -11,8 +11,8 @@
     <remap from="~output" to="/velodyne/z_filtered" />
     <rosparam>
       filter_field_name: y
-      filter_limit_min: -1.5
-      filter_limit_max: 1.5
+      filter_limit_min: -3.5
+      filter_limit_max: 3.5
       filter_limit_negative: False
       max_queue_size: 1
       keep_organized: False

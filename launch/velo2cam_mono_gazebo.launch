@@ -2,7 +2,7 @@
 
 	<arg name="stdout" default="screen" />
 
-	<include file="$(find velo2cam_calibration)/launch/mono_pattern.launch" />
+	<include file="$(find velo2cam_calibration)/launch/mono_pattern_gazebo.launch" />
 	<include file="$(find velo2cam_calibration)/launch/real_laser_pattern.launch" />
 
 	<node pkg="velo2cam_calibration" type="velo2cam_calibration" name="velo2cam_calibration" output="screen">

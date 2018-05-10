@@ -19,7 +19,7 @@
 */
 
 /*
-  mono_qr_pattern: Find the circle centers in the color image
+  mono_qr_pattern: Find the circle centers in the color image by making use of the ArUco markers
 */
 #include <ros/ros.h>
 #include "ros/package.h"
@@ -45,7 +45,6 @@
 #include <pcl/common/eigen.h>
 #include <pcl/segmentation/extract_clusters.h>
 #include <iostream>
-
 #include <dynamic_reconfigure/server.h>
 #include <velo2cam_calibration/MonocularConfig.h>
 #include "velo2cam_utils.h"
@@ -113,15 +112,15 @@ void imageCallback(const sensor_msgs::ImageConstPtr& msg, const sensor_msgs::Cam
 
   // TODO Not needed at each frame -> Move it to separate callback
   Mat cameraMatrix(3,3, CV_32F);
-  cameraMatrix.at<float>(0, 0) = cinfo->K[0];
-  cameraMatrix.at<float>(0, 1) = cinfo->K[1];
-  cameraMatrix.at<float>(0, 2) = cinfo->K[2];
-  cameraMatrix.at<float>(1, 0) = cinfo->K[3];
-  cameraMatrix.at<float>(1, 1) = cinfo->K[4];
-  cameraMatrix.at<float>(1, 2) = cinfo->K[5];
-  cameraMatrix.at<float>(2, 0) = cinfo->K[6];
-  cameraMatrix.at<float>(2, 1) = cinfo->K[7];
-  cameraMatrix.at<float>(2, 2) = cinfo->K[8];
+  cameraMatrix.at<float>(0, 0) = cinfo->P[0];
+  cameraMatrix.at<float>(0, 1) = cinfo->P[1];
+  cameraMatrix.at<float>(0, 2) = cinfo->P[2];
+  cameraMatrix.at<float>(1, 0) = cinfo->P[4];
+  cameraMatrix.at<float>(1, 1) = cinfo->P[5];
+  cameraMatrix.at<float>(1, 2) = cinfo->P[6];
+  cameraMatrix.at<float>(2, 0) = cinfo->P[8];
+  cameraMatrix.at<float>(2, 1) = cinfo->P[9];
+  cameraMatrix.at<float>(2, 2) = cinfo->P[10];
 
   Mat distCoeffs(1, cinfo->D.size(), CV_32F);
   for(int i=0; i<cinfo->D.size(); i++)
@@ -150,6 +149,9 @@ void imageCallback(const sensor_msgs::ImageConstPtr& msg, const sensor_msgs::Cam
       double x = tvecs[i][0];
       double y = tvecs[i][1];
       double z = tvecs[i][2];
+
+//      cout << "x: " << x << " y: " << y <<" z: " << z << endl;
+
       pcl::PointXYZ qr_center;
       qr_center.x = x;
       qr_center.y = y;
@@ -158,9 +160,10 @@ void imageCallback(const sensor_msgs::ImageConstPtr& msg, const sensor_msgs::Cam
       cv::Point3d pt_cv(x, y, z);
       cv::Point2d uv;
       uv = cam_model_.project3dToPixel(pt_cv);
+//      cout << "Center at: " << uv << endl;
 
       cv::aruco::drawAxis(imageCopy, cameraMatrix, distCoeffs, rvecs[i], tvecs[i], 0.1);
-      circle(imageCopy, uv, 12, Scalar(0,0,255), -1);
+      circle(imageCopy, uv, 22, Scalar(150), -1);
     }
 
     if(qr_cloud->points.size()>3){
@@ -271,7 +274,7 @@ void imageCallback(const sensor_msgs::ImageConstPtr& msg, const sensor_msgs::Cam
 
       // Compute centers clusters
       pcl::PointCloud<pcl::PointXYZ>::Ptr clusters_cloud(new pcl::PointCloud<pcl::PointXYZ>);
-      getCenterClusters(cumulative_cloud, clusters_cloud, 0.02, 10, 10000);
+      getCenterClusters(cumulative_cloud, clusters_cloud, 0.05, cumulative_cloud->points.size()/6, cumulative_cloud->points.size()/3);
 
       // Publish pointcloud messages
       sensor_msgs::PointCloud2 ros_pointcloud;
@@ -335,8 +338,12 @@ int main(int argc, char **argv)
   nh_.param("delta_x_centers", delta_x_centers_, 0.30);
   nh_.param("delta_y_centers", delta_y_centers_, 0.30);
 
-  message_filters::Subscriber<sensor_msgs::Image> image_sub(nh_, "/stereo_camera/left/image_rect_color", 1);
-  message_filters::Subscriber<sensor_msgs::CameraInfo> cinfo_sub(nh_, "/stereo_camera/left/camera_info", 1);
+  string image_topic, cinfo_topic;
+  nh_.param<string>("image_topic", image_topic, "/stereo_camera/left/image_rect_color");
+  nh_.param<string>("cinfo_topic", cinfo_topic, "/stereo_camera/left/camera_info");
+
+  message_filters::Subscriber<sensor_msgs::Image> image_sub(nh_, image_topic, 1);
+  message_filters::Subscriber<sensor_msgs::CameraInfo> cinfo_sub(nh_, cinfo_topic, 1);
 
   message_filters::TimeSynchronizer<sensor_msgs::Image, sensor_msgs::CameraInfo> sync(image_sub, cinfo_sub, 10);
   sync.registerCallback(boost::bind(&imageCallback, _1, _2));

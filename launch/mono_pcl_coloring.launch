@@ -1,0 +1,11 @@
+<launch>
+
+  <node pkg="velo2cam_calibration" type="pcl_coloring" name="pcl_coloring" output="screen">
+    <remap from="~pointcloud" to="/velodyne_points"/>
+    <remap from="~camera_info" to="/right_camera/camera_info"/>
+    <remap from="~image" to="/right_camera/image_rect_color"/>
+    <param name="target_frame" value="/right_camera"/>
+    <param name="source_frame" value="/velodyne"/>
+  </node>
+
+</launch>

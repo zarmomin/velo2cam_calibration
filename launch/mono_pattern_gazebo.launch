@@ -1,0 +1,11 @@
+<launch>
+
+    <arg name="stdout" default="screen" />
+
+    <node pkg="velo2cam_calibration" type="mono_qr_pattern" name="mono_qr_pattern" output="screen">
+        <param name="image_topic" value="/stereo_camera/left/image_rect_color" />
+        <param name="cinfo_topic" value="/stereo_camera/left/camera_info" />
+    </node>
+    
+    <node pkg="tf" type="static_transform_publisher" name="camera_ros_tf" args="0 0 0 -1.57079632679 0 -1.57079632679 rotated_stereo_camera stereo_camera 10"/>
+</launch>

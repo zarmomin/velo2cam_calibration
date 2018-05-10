@@ -24,6 +24,8 @@
 
 #define PCL_NO_PRECOMPILE
 
+#define DEBUG
+
 #include "velo2cam_calibration/ClusterCentroids.h"
 
 #include <vector>
@@ -71,6 +73,10 @@ std::vector<pcl::PointXYZ> lv(4), cv(4);
 
 tf::StampedTransform tf_velodyne_camera;
 
+string camera_frame_id = "";
+string camera_rotated_frame_id = "";
+string lidar_frame_id = "";
+
 typedef Eigen::Matrix<double, 12, 12> Matrix12d;
 typedef Eigen::Matrix<double, 12, 1> Vector12d;
 
@@ -100,13 +106,13 @@ const std::string currentDateTime() {
 }
 
 void calibrateExtrinsics(int seek_iter = -1){
-  // ROS_INFO("Hey man, keep calm... I'm calibrating your sensors...");
+//   ROS_INFO("Hey man, keep calm... I'm calibrating your sensors...");
 
   std::vector<pcl::PointXYZ> local_lv, local_cv;
   pcl::PointCloud<pcl::PointXYZ>::Ptr local_laser_cloud, local_camera_cloud;
   pcl::PointCloud<pcl::PointXYZ> local_l_cloud, local_c_cloud;
 
-  int used_stereo, used_laser;
+  int used_camera, used_laser;
 
   if (seek_iter>0){
     if(DEBUG) ROS_INFO("Seeking %d iterations", seek_iter);
@@ -123,7 +129,7 @@ void calibrateExtrinsics(int seek_iter = -1){
       return;
     }
 
-    used_stereo = std::get<1>(*it);
+    used_camera = std::get<1>(*it);
     used_laser = std::get<1>(*it2);
 
     local_cv = std::get<3>(*it);
@@ -143,11 +149,11 @@ void calibrateExtrinsics(int seek_iter = -1){
 
   sensor_msgs::PointCloud2 ros_cloud;
   pcl::toROSMsg(*local_camera_cloud, ros_cloud);
-  ros_cloud.header.frame_id = "stereo";
+  ros_cloud.header.frame_id = camera_rotated_frame_id;
   clusters_c.publish(ros_cloud);
 
   pcl::toROSMsg(*local_laser_cloud, ros_cloud);
-  ros_cloud.header.frame_id = "velodyne";
+  ros_cloud.header.frame_id = lidar_frame_id;
   clusters_l.publish(ros_cloud);
 
   Vector12d las_12;
@@ -206,7 +212,7 @@ void calibrateExtrinsics(int seek_iter = -1){
   pcl::transformPointCloud(*local_camera_cloud, *translated_pc, Tm);
 
   pcl::toROSMsg(*translated_pc, ros_cloud);
-  ros_cloud.header.frame_id = "velodyne";
+  ros_cloud.header.frame_id = lidar_frame_id;
   t_pub.publish(ros_cloud);
 
   pcl::IterativeClosestPoint<pcl::PointXYZ, pcl::PointXYZ> icp;
@@ -245,8 +251,8 @@ void calibrateExtrinsics(int seek_iter = -1){
   geometry_msgs::TransformStamped transformStamped;
 
   transformStamped.header.stamp = ros::Time::now();
-  transformStamped.header.frame_id = "velodyne";
-  transformStamped.child_frame_id = "stereo";
+  transformStamped.header.frame_id = lidar_frame_id;
+  transformStamped.child_frame_id = camera_rotated_frame_id;
   transformStamped.transform.translation.x = final_trans(0,3);
   transformStamped.transform.translation.y = final_trans(1,3);
   transformStamped.transform.translation.z = final_trans(2,3);
@@ -268,7 +274,7 @@ void calibrateExtrinsics(int seek_iter = -1){
   #endif
 
   static tf::TransformBroadcaster br;
-  tf_velodyne_camera = tf::StampedTransform(transf, ros::Time::now(), "velodyne", "stereo");
+  tf_velodyne_camera = tf::StampedTransform(transf, ros::Time::now(), lidar_frame_id, camera_rotated_frame_id);
   if (publish_tf_) br.sendTransform(tf_velodyne_camera);
 
   tf::Transform inverse = tf_velodyne_camera.inverse();
@@ -277,7 +283,7 @@ void calibrateExtrinsics(int seek_iter = -1){
   inverse.getBasis().getRPY(roll, pitch, yaw);
 
   if (save_to_file_){
-    savefile << seek_iter << ", " << xt << ", " << yt << ", " << zt << ", " << roll << ", " << pitch << ", " << yaw << ", " << used_laser << ", " << used_stereo << endl;
+    savefile << seek_iter << ", " << xt << ", " << yt << ", " << zt << ", " << roll << ", " << pitch << ", " << yaw << ", " << used_laser << ", " << used_camera << endl;
   }
 
   ROS_INFO("[V2C] Calibration result:");
@@ -293,8 +299,10 @@ void calibrateExtrinsics(int seek_iter = -1){
 }
 
 void laser_callback(const velo2cam_calibration::ClusterCentroids::ConstPtr velo_centroids){
-  // ROS_INFO("Velodyne pattern ready!");
+  if(DEBUG) ROS_INFO("Velodyne pattern ready!");
+  ROS_INFO("Velodyne pattern ready!");
   laserReceived = true;
+  lidar_frame_id = velo_centroids->header.frame_id;
 
   fromROSMsg(velo_centroids->cloud, *laser_cloud);
 
@@ -333,9 +341,13 @@ void laser_callback(const velo2cam_calibration::ClusterCentroids::ConstPtr velo_
   }
 }
 
-void stereo_callback(velo2cam_calibration::ClusterCentroids::ConstPtr image_centroids){
-  // if(DEBUG) ROS_INFO("Camera pattern ready!");
-
+void camera_callback(velo2cam_calibration::ClusterCentroids::ConstPtr image_centroids){
+   if(DEBUG) ROS_INFO("Camera pattern ready!");
+   ROS_INFO("Camera pattern ready!");
+  camera_frame_id = image_centroids->header.frame_id;
+  std::ostringstream sstream;
+  sstream << "rotated_" << camera_frame_id;
+  camera_rotated_frame_id = sstream.str();
 #ifdef TF2
 
   //TODO: adapt to ClusterCentroids
@@ -346,7 +358,7 @@ void stereo_callback(velo2cam_calibration::ClusterCentroids::ConstPtr image_cent
   tf2_ros::TransformListener tfListener(tfBuffer);
   geometry_msgs::TransformStamped transformStamped;
   try{
-    transformStamped = tfBuffer.lookupTransform("stereo", "stereo_camera",
+    transformStamped = tfBuffer.lookupTransform(camera_rotated_frame_id, camera_frame_id,
                              ros::Time(0), ros::Duration(20));
   }
   catch (tf2::TransformException &ex) {
@@ -366,8 +378,8 @@ void stereo_callback(velo2cam_calibration::ClusterCentroids::ConstPtr image_cent
   tf::TransformListener listener;
   tf::StampedTransform transform;
   try{
-    listener.waitForTransform("stereo", "stereo_camera", ros::Time(0), ros::Duration(20.0));
-    listener.lookupTransform ("stereo", "stereo_camera", ros::Time(0), transform);
+    listener.waitForTransform(camera_rotated_frame_id, camera_frame_id, ros::Time(0), ros::Duration(20.0));
+    listener.lookupTransform (camera_rotated_frame_id, camera_frame_id, ros::Time(0), transform);
   }catch (tf::TransformException& ex) {
     ROS_WARN("TF exception:\n%s", ex.what());
     return;
@@ -427,9 +439,9 @@ int main(int argc, char **argv){
   nh_.param<bool>("save_to_file", save_to_file_, false);
   nh_.param<bool>("publish_tf", publish_tf_, true);
 
-  static tf::TransformBroadcaster br;
-  tf_velodyne_camera = tf::StampedTransform(tf::Transform::getIdentity(), ros::Time::now(), "velodyne", "stereo");
-  if (publish_tf_) br.sendTransform(tf_velodyne_camera);
+//  static tf::TransformBroadcaster br;
+//  tf_velodyne_camera = tf::StampedTransform(tf::Transform::getIdentity(), ros::Time::now(), "velodyne", "stereo");
+//  if (publish_tf_) br.sendTransform(tf_velodyne_camera);
 
   laserReceived = false;
   laser_cloud = pcl::PointCloud<pcl::PointXYZ>::Ptr(new pcl::PointCloud<pcl::PointXYZ>);
@@ -439,7 +451,7 @@ int main(int argc, char **argv){
   icamera_cloud = pcl::PointCloud<pcl::PointXYZI>::Ptr(new pcl::PointCloud<pcl::PointXYZI>);
 
   ros::Subscriber laser_sub = nh_.subscribe<velo2cam_calibration::ClusterCentroids>("cloud1", 1, laser_callback);
-  ros::Subscriber stereo_sub = nh_.subscribe<velo2cam_calibration::ClusterCentroids>("cloud2", 1, stereo_callback);
+  ros::Subscriber camera_sub = nh_.subscribe<velo2cam_calibration::ClusterCentroids>("cloud2", 1, camera_callback);
 
   t_pub = nh_.advertise<sensor_msgs::PointCloud2>("translated_cloud", 1);
   clusters_c = nh_.advertise<sensor_msgs::PointCloud2>("clusters_camera", 1);
@@ -502,24 +514,26 @@ int main(int argc, char **argv){
   arg->SetAttribute("default","screen");
   root->LinkEndChild( arg );
 
-  string stereo_rotation = "0 0 0 -1.57079632679 0 -1.57079632679 stereo stereo_camera 10";
+  std::ostringstream camera_rot_stream;
+  camera_rot_stream << "0 0 0 -1.57079632679 0 -1.57079632679 " << camera_rotated_frame_id << " " << camera_frame_id << " 10";
+  string camera_rotation  = camera_rot_stream.str();
 
-  TiXmlElement * stereo_rotation_node = new TiXmlElement( "node" );
-  stereo_rotation_node->SetAttribute("pkg","tf");
-  stereo_rotation_node->SetAttribute("type","static_transform_publisher");
-  stereo_rotation_node->SetAttribute("name","stereo_ros_tf");
-  stereo_rotation_node->SetAttribute("args", stereo_rotation);
-  root->LinkEndChild( stereo_rotation_node );
+  TiXmlElement * camera_rotation_node = new TiXmlElement( "node" );
+  camera_rotation_node->SetAttribute("pkg","tf");
+  camera_rotation_node->SetAttribute("type","static_transform_publisher");
+  camera_rotation_node->SetAttribute("name","camera_ros_tf");
+  camera_rotation_node->SetAttribute("args", camera_rotation);
+  root->LinkEndChild( camera_rotation_node );
 
   std::ostringstream sstream;
-  sstream << xt << " " << yt << " " << zt << " " << yaw << " " <<pitch<< " " << roll << " stereo velodyne 100";
+  sstream << xt << " " << yt << " " << zt << " " << yaw << " " <<pitch<< " " << roll << " " << camera_rotated_frame_id << " " << lidar_frame_id << " 100";
   string tf_args = sstream.str();
   cout << tf_args << endl;
 
   TiXmlElement * node = new TiXmlElement( "node" );
   node->SetAttribute("pkg","tf");
   node->SetAttribute("type","static_transform_publisher");
-  node->SetAttribute("name","l2c_tf");
+  node->SetAttribute("name","velo2cam_tf");
   node->SetAttribute("args", tf_args);
   root->LinkEndChild( node );
 
