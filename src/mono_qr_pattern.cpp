@@ -59,6 +59,7 @@ ros::Publisher qr_pub, centers_cloud_pub, cumulative_pub, clusters_pub;
 
 // ROS params
 double marker_size_, delta_x_marker_circle_, delta_y_marker_circle_, delta_x_centers_, delta_y_centers_;
+int frames_proc_ = 0, frames_used_ = 0;
 
 Eigen::Vector3f mean(pcl::PointCloud<pcl::PointXYZ>::Ptr cumulative_cloud){
   double x=0, y=0, z=0;
@@ -95,6 +96,8 @@ Eigen::Matrix3f covariance(pcl::PointCloud<pcl::PointXYZ>::Ptr cumulative_cloud,
 }
 
 void imageCallback(const sensor_msgs::ImageConstPtr& msg, const sensor_msgs::CameraInfoConstPtr& left_info) {
+  frames_proc_++;
+
   cv_bridge::CvImageConstPtr cv_img_ptr;
   try {
     cv_img_ptr = cv_bridge::toCvShare(msg);
@@ -287,10 +290,11 @@ void imageCallback(const sensor_msgs::ImageConstPtr& msg, const sensor_msgs::Cam
       centers_pointcloud.header = msg->header;
       centers_cloud_pub.publish(centers_pointcloud);
 
+      frames_used_++;
       velo2cam_calibration::ClusterCentroids to_send;
       to_send.header = msg->header;
-      to_send.cluster_iterations = 0;
-      to_send.total_iterations = 0;
+      to_send.cluster_iterations = frames_used_;
+      to_send.total_iterations = frames_proc_;
       to_send.cloud = centers_pointcloud;
       clusters_pub.publish(to_send);
 
