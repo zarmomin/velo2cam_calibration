@@ -192,7 +192,12 @@ void imageCallback(const sensor_msgs::ImageConstPtr& msg, const sensor_msgs::Cam
       Eigen::Affine3d rotation = getRotationMatrix(floor_plane_normal_vector, xy_plane_normal_vector);
       pcl::transformPointCloud(*qr_cloud, *xy_cloud, rotation.inverse());
 
-      // Order vertices in 2D by comparing their relative position to their centroid
+      // Order QR centers in 2D by comparing their relative position to their centroid
+      // 0-----1
+      // |     |
+      // |     |
+      // 3-----2
+
       vector<cv::Point2f> qr_centers;
       for(pcl::PointCloud<pcl::PointXYZ>::iterator it=xy_cloud->points.begin(); it<xy_cloud->points.end(); it++){
         qr_centers.push_back(cv::Point2f(it->x, it->y));
@@ -208,6 +213,7 @@ void imageCallback(const sensor_msgs::ImageConstPtr& msg, const sensor_msgs::Cam
       center.x = avg_x/4.;
       center.y = avg_y/4.;
       vector<cv::Point2f> v(4);
+
       for(vector<cv::Point2f>::iterator it=qr_centers.begin(); it<qr_centers.end(); it++){
         double x_dif = (*it).x - center.x;
         double y_dif = (*it).y - center.y;
@@ -229,51 +235,56 @@ void imageCallback(const sensor_msgs::ImageConstPtr& msg, const sensor_msgs::Cam
       double cosine = cos(ang);
       double sine = sin(ang);
 
-      // Set keypoints
+      // Auxiliar distance variables
       double delta_x_marker_far_circle_ = delta_x_marker_circle_+ delta_x_centers_;
       double delta_y_marker_far_circle_ = delta_y_marker_circle_+ delta_y_centers_;
 
-      // Compute centers coordinates (in 2D)
-      pcl::PointXYZ circle1(v[0].x + (delta_x_marker_circle_ * cosine - delta_y_marker_circle_ * sine), v[0].y + (delta_y_marker_circle_ * cosine + delta_x_marker_circle_ * sine), xy_cloud->at(0).z);
-      pcl::PointXYZ circle2(v[0].x + (delta_x_marker_far_circle_ * cosine - delta_y_marker_circle_ * sine), v[0].y + (delta_y_marker_circle_ * cosine + delta_x_marker_far_circle_ * sine), xy_cloud->at(1).z);
-      pcl::PointXYZ circle3(v[0].x + (delta_x_marker_far_circle_ * cosine - delta_y_marker_far_circle_ * sine), v[0].y + (delta_y_marker_far_circle_ * cosine + delta_x_marker_far_circle_ * sine), xy_cloud->at(2).z);
-      pcl::PointXYZ circle4(v[0].x + (delta_x_marker_circle_ * cosine - delta_y_marker_far_circle_ * sine), v[0].y + (delta_y_marker_far_circle_ * cosine + delta_x_marker_circle_ * sine), xy_cloud->at(3).z);
+      // Compute circle centers (in 2D) from all QR detections (4 centers per circle)
+      for(int i=0; i<4; i++){
+        int x_factor = (i%3) == 0 ? 1 : -1; // x distances are added for QRs 0 and 3, substracted otherwise
+        int y_factor =  (i<2) ? 1 : -1; // y distances are added for QRs 0 and 1, substracted otherwise
+        pcl::PointXYZ circle1(v[i].x + x_factor * (delta_x_marker_circle_ * cosine - delta_y_marker_circle_ * sine), v[i].y + y_factor * (delta_y_marker_circle_ * cosine + delta_x_marker_circle_ * sine), xy_cloud->at(0).z);
+        pcl::PointXYZ circle2(v[i].x + x_factor * (delta_x_marker_far_circle_ * cosine - delta_y_marker_circle_ * sine), v[i].y + y_factor * (delta_y_marker_circle_ * cosine + delta_x_marker_far_circle_ * sine), xy_cloud->at(1).z);
+        pcl::PointXYZ circle3(v[i].x + x_factor * (delta_x_marker_far_circle_ * cosine - delta_y_marker_far_circle_ * sine), v[i].y + y_factor * (delta_y_marker_far_circle_ * cosine + delta_x_marker_far_circle_ * sine), xy_cloud->at(2).z);
+        pcl::PointXYZ circle4(v[i].x + x_factor * (delta_x_marker_circle_ * cosine - delta_y_marker_far_circle_ * sine), v[i].y + y_factor * (delta_y_marker_far_circle_ * cosine + delta_x_marker_circle_ * sine), xy_cloud->at(3).z);
 
-      centers_xy_cloud->push_back(circle1);
-      centers_xy_cloud->push_back(circle2);
-      centers_xy_cloud->push_back(circle3);
-      centers_xy_cloud->push_back(circle4);
+        centers_xy_cloud->push_back(circle1);
+        centers_xy_cloud->push_back(circle2);
+        centers_xy_cloud->push_back(circle3);
+        centers_xy_cloud->push_back(circle4);
+      }
 
       // Rotate centers back to original 3D plane
       pcl::PointCloud<pcl::PointXYZ>::Ptr centers_cloud(new pcl::PointCloud<pcl::PointXYZ>);
       pcl::transformPointCloud(*centers_xy_cloud, *centers_cloud, rotation);
 
       // Add centers to cumulative for further clustering
-      cumulative_cloud->push_back(centers_cloud->at(0));
-      cumulative_cloud->push_back(centers_cloud->at(1));
-      cumulative_cloud->push_back(centers_cloud->at(2));
-      cumulative_cloud->push_back(centers_cloud->at(3));
+      for(int i=0; i<centers_cloud->size(); i++){
+        cumulative_cloud->push_back(centers_cloud->at(i));
+      }
 
-      // Draw centers
-      cv::Point3d pt_circle1(centers_cloud->at(0).x, centers_cloud->at(0).y, centers_cloud->at(0).z);
-      cv::Point2d uv_circle1;
-      uv_circle1 = cam_model_.project3dToPixel(pt_circle1);
-      circle(imageCopy, uv_circle1, 2, Scalar(255,0,255), -1);
 
-      cv::Point3d pt_circle2(centers_cloud->at(1).x, centers_cloud->at(1).y, centers_cloud->at(1).z);
-      cv::Point2d uv_circle2;
-      uv_circle2 = cam_model_.project3dToPixel(pt_circle2);
-      circle(imageCopy, uv_circle2, 2, Scalar(255,0,255), -1);
+      if(DEBUG) { // Draw centers
+        cv::Point3d pt_circle1(centers_cloud->at(0).x, centers_cloud->at(0).y, centers_cloud->at(0).z);
+        cv::Point2d uv_circle1;
+        uv_circle1 = cam_model_.project3dToPixel(pt_circle1);
+        circle(imageCopy, uv_circle1, 2, Scalar(255, 0, 255), -1);
 
-      cv::Point3d pt_circle3(centers_cloud->at(2).x, centers_cloud->at(2).y, centers_cloud->at(2).z);
-      cv::Point2d uv_circle3;
-      uv_circle3 = cam_model_.project3dToPixel(pt_circle3);
-      circle(imageCopy, uv_circle3, 2, Scalar(255,0,255), -1);
+        cv::Point3d pt_circle2(centers_cloud->at(1).x, centers_cloud->at(1).y, centers_cloud->at(1).z);
+        cv::Point2d uv_circle2;
+        uv_circle2 = cam_model_.project3dToPixel(pt_circle2);
+        circle(imageCopy, uv_circle2, 2, Scalar(255, 0, 255), -1);
 
-      cv::Point3d pt_circle4(centers_cloud->at(3).x, centers_cloud->at(3).y, centers_cloud->at(3).z);
-      cv::Point2d uv_circle4;
-      uv_circle4 = cam_model_.project3dToPixel(pt_circle4);
-      circle(imageCopy, uv_circle4, 2, Scalar(255,0,255), -1);
+        cv::Point3d pt_circle3(centers_cloud->at(2).x, centers_cloud->at(2).y, centers_cloud->at(2).z);
+        cv::Point2d uv_circle3;
+        uv_circle3 = cam_model_.project3dToPixel(pt_circle3);
+        circle(imageCopy, uv_circle3, 2, Scalar(255, 0, 255), -1);
+
+        cv::Point3d pt_circle4(centers_cloud->at(3).x, centers_cloud->at(3).y, centers_cloud->at(3).z);
+        cv::Point2d uv_circle4;
+        uv_circle4 = cam_model_.project3dToPixel(pt_circle4);
+        circle(imageCopy, uv_circle4, 2, Scalar(255, 0, 255), -1);
+      }
 
       // Compute centers clusters
       pcl::PointCloud<pcl::PointXYZ>::Ptr clusters_cloud(new pcl::PointCloud<pcl::PointXYZ>);
@@ -304,8 +315,11 @@ void imageCallback(const sensor_msgs::ImageConstPtr& msg, const sensor_msgs::Cam
       cumulative_pub.publish(cumulative_pointcloud);
     }
   }
-  cv::imshow("out", imageCopy);
-  cv::waitKey(1);
+
+  if(DEBUG){
+    cv::imshow("out", imageCopy);
+    cv::waitKey(1);
+  }
 }
 
 
