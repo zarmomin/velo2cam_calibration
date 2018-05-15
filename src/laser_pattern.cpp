@@ -70,6 +70,7 @@ pcl::PointCloud<pcl::PointXYZ>::Ptr cumulative_cloud;
 double threshold_;
 double passthrough_radius_min_, passthrough_radius_max_, circle_radius_,
        centroid_distance_min_, centroid_distance_max_;
+int rings_count_;
 Eigen::Vector3f axis_;
 double angle_threshold_;
 double cluster_size_;
@@ -130,7 +131,7 @@ void callback(const PointCloud2::ConstPtr& laser_cloud){
   coefficients_v(3) = coefficients->values[3];
 
   // Get edges points by range
-  vector<vector<Velodyne::Point*> > rings = Velodyne::getRings(*velocloud);
+  vector<vector<Velodyne::Point*> > rings = Velodyne::getRings(*velocloud, rings_count_);
   for (vector<vector<Velodyne::Point*> >::iterator ring = rings.begin(); ring < rings.end(); ring++){
     Velodyne::Point *prev, *succ;
     if (ring->empty()) continue;
@@ -167,7 +168,7 @@ void callback(const PointCloud2::ConstPtr& laser_cloud){
 
   // Remove kps not belonging to circles by coords
   pcl::PointCloud<pcl::PointXYZ>::Ptr circles_cloud(new pcl::PointCloud<pcl::PointXYZ>);
-  vector<vector<Velodyne::Point*> > rings2 = Velodyne::getRings(*pattern_cloud);
+  vector<vector<Velodyne::Point*> > rings2 = Velodyne::getRings(*pattern_cloud, rings_count_);
   int ringsWithCircle = 0;
   for (vector<vector<Velodyne::Point*> >::iterator ring = rings2.begin(); ring < rings2.end(); ring++){
     if(ring->size() < 3){
@@ -241,7 +242,7 @@ void callback(const PointCloud2::ConstPtr& laser_cloud){
   pcl::EuclideanClusterExtraction<pcl::PointXYZ> euclidean_cluster;
   euclidean_cluster.setClusterTolerance (0.55);
   euclidean_cluster.setMinClusterSize (12);
-  euclidean_cluster.setMaxClusterSize (RINGS_COUNT*4);
+  euclidean_cluster.setMaxClusterSize (rings_count_*4);
   euclidean_cluster.setSearchMethod (tree);
   euclidean_cluster.setInputCloud (xy_cloud);
   euclidean_cluster.extract (cluster_indices);
@@ -468,6 +469,7 @@ int main(int argc, char **argv){
 
   nh_.param("cluster_size", cluster_size_, 0.02);
   nh_.param("min_centers_found", min_centers_found_, 4);
+  nh_.param("rings_count", rings_count_, 16);
 
   nFrames = 0;
   cumulative_cloud = pcl::PointCloud<pcl::PointXYZ>::Ptr(new pcl::PointCloud<pcl::PointXYZ>);

@@ -52,7 +52,7 @@
             keep_organized: False
         </rosparam>
     </node>
-    <node pkg="velo2cam_calibration" type="laser_pattern" name="laser_pattern" output="screen">
+    <node pkg="velo2cam_calibration" type="laser_pattern" name="laser_pattern" output="$(arg stdout)">
         <remap from="~cloud1" to="/velodyne/xy_filtered"/>
         <rosparam>
             x: 0
@@ -64,6 +64,7 @@
             passthrough_radius_max: 6.0
             centroid_distance_min: 0.15
             centroid_distance_max: 0.8
+            rings_count: 32
         </rosparam>
     </node>
 
