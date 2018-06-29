@@ -63,52 +63,57 @@ void callback(const PointCloud2::ConstPtr& pcl_msg, const CameraInfoConstPtr& ci
   image_geometry::PinholeCameraModel cam_model_;
   cam_model_.fromCameraInfo(cinfo_msg);
 
-  pcl::PointCloud<pcl::PointXYZ>::Ptr pcl_cloud(new pcl::PointCloud<pcl::PointXYZ>); // From ROS Msg
-  pcl::PointCloud<pcl::PointXYZ>::Ptr trans_cloud(new pcl::PointCloud<pcl::PointXYZ>); // After transformation
+  pcl::PointCloud<pcl::PointXYZRGB>::Ptr pcl_cloud(new pcl::PointCloud<pcl::PointXYZRGB>); // From ROS Msg
+  pcl::PointCloud<pcl::PointXYZRGB>::Ptr trans_cloud(new pcl::PointCloud<pcl::PointXYZRGB>); // After transformation
   PointCloudXYZRGB::Ptr coloured = PointCloudXYZRGB::Ptr(new PointCloudXYZRGB); // For coloring purposes
   fromROSMsg(*pcl_msg, *pcl_cloud);
 
   tf::TransformListener listener;
   tf::StampedTransform transform;
-  if(DEBUG) cout << "FRAME ID "<< pcl_cloud->header.frame_id << endl;
+  if(DEBUG) cout << "FRAME ID "<< pcl_cloud->header.frame_id.c_str() << endl;
+  if(DEBUG) cout << "FRAME ID "<< image_msg->header.frame_id.c_str() << endl;
 
   try{
-    listener.waitForTransform(target_frame.c_str(), source_frame.c_str(), ros::Time(0), ros::Duration(20.0));
-    listener.lookupTransform (target_frame.c_str(), source_frame.c_str(), ros::Time(0), transform);
+    listener.waitForTransform(image_msg->header.frame_id.c_str(), pcl_cloud->header.frame_id.c_str(), ros::Time(0), ros::Duration(20.0));
+    listener.lookupTransform (image_msg->header.frame_id.c_str(), pcl_cloud->header.frame_id.c_str(), ros::Time(0), transform);
   }catch (tf::TransformException& ex) {
     ROS_WARN("[draw_frames] TF exception:\n%s", ex.what());
     return;
   }
+  if(DEBUG) ROS_INFO("TF found, coloring");
   pcl_ros::transformPointCloud (*pcl_cloud, *trans_cloud, transform);
-  trans_cloud->header.frame_id = target_frame;
+  trans_cloud->header.frame_id = image_msg->header.frame_id;
 
   pcl::copyPointCloud(*trans_cloud, *coloured);
 
   for (pcl::PointCloud<pcl::PointXYZRGB>::iterator pt = coloured->points.begin(); pt < coloured->points.end(); pt++)
   {
-    cv::Point3d pt_cv((*pt).x, (*pt).y, (*pt).z);
-    cv::Point2d uv;
-    uv = cam_model_.project3dToPixel(pt_cv);
 
-    if(uv.x>0 && uv.x < image.cols && uv.y > 0 && uv.y < image.rows){
-      // Copy colour to laser pointcloud
-      (*pt).b = image.at<cv::Vec3b>(uv)[0];
-      (*pt).g = image.at<cv::Vec3b>(uv)[1];
-      (*pt).r = image.at<cv::Vec3b>(uv)[2];
+    if(pt->z > 0){
+      cv::Point3d pt_cv((*pt).x, (*pt).y, (*pt).z);
+      cv::Point2d uv;
+      uv = cam_model_.project3dToPixel(pt_cv);
+
+      if(uv.x>0 && uv.x < image.cols && uv.y > 0 && uv.y < image.rows){
+        // Copy colour to laser pointcloud
+        (*pt).b = image.at<cv::Vec3b>(uv)[2];
+        (*pt).g = image.at<cv::Vec3b>(uv)[1];
+        (*pt).r = image.at<cv::Vec3b>(uv)[0];
+      }
     }
-
   }
-  if(DEBUG) ROS_INFO("Publish coloured PC");
 
   // Publish coloured PointCloud
   sensor_msgs::PointCloud2 pcl_colour_ros;
   pcl::toROSMsg(*coloured, pcl_colour_ros);
   pcl_colour_ros.header.stamp = pcl_msg->header.stamp ;
   pcl_pub.publish(pcl_colour_ros);
+  if(DEBUG) ROS_INFO("Publish coloured PC");
+  if(DEBUG) cout << "Published ID "<< pcl_colour_ros.header.frame_id << endl;
 }
 
 int main(int argc, char **argv){
-  ros::init(argc, argv, "pcl_coloring");
+  ros::init(argc, argv, "pcl_coloring", ros::init_options::AnonymousName);
   ros::NodeHandle nh_("~"); // LOCAL
   // Parameters
   nh_.param<std::string>("target_frame", target_frame, "/stereo_camera");
