@@ -53,7 +53,7 @@
 #include <pcl/registration/icp.h>
 #include <pcl/io/pcd_io.h>
 #include <dynamic_reconfigure/server.h>
-
+#include <sensor_msgs/point_cloud2_iterator.h>
 #include <velo2cam_calibration/LaserConfig.h>
 #include "velo2cam_utils.h"
 #include <velo2cam_calibration/ClusterCentroids.h>
@@ -61,13 +61,13 @@
 using namespace std;
 using namespace sensor_msgs;
 
-ros::Publisher cumulative_pub, centers_pub, pattern_pub, range_pub,
-               coeff_pub, aux_pub, auxpoint_pub, debug_pub;
+ros::Publisher cumulative_pub, centers_pub, pattern_pub2, range_pub,
+               coeff_pub, aux_pub, auxpoint_pub, debug_pub, edges_cloud_pub, inliers_pub, pattern_pub;
 int nFrames; // Used for resetting center computation
 pcl::PointCloud<pcl::PointXYZ>::Ptr cumulative_cloud;
 
 // Dynamic parameters
-double threshold_;
+double plane_distance_threshold_;
 double passthrough_radius_min_, passthrough_radius_max_, circle_radius_,
        centroid_distance_min_, centroid_distance_max_;
 Eigen::Vector3f axis_;
@@ -75,6 +75,52 @@ double angle_threshold_;
 double cluster_size_;
 int clouds_proc_ = 0, clouds_used_ = 0;
 int min_centers_found_;
+
+
+void readCloudToMsg(const sensor_msgs::PointCloud2 &cloud, pcl::PointCloud<Velodyne::Point> &pcl_cloud)
+{
+  sensor_msgs::PointCloud2ConstIterator<float> it_x(cloud, "x");
+  sensor_msgs::PointCloud2ConstIterator<float> it_y(cloud, "y");
+  sensor_msgs::PointCloud2ConstIterator<float> it_z(cloud, "z");
+  sensor_msgs::PointCloud2ConstIterator<uint8_t> it_r(cloud, "ring");
+
+  Velodyne::Point laser_pt;
+
+  for (; it_x != it_x.end(); ++it_x, ++it_y, ++it_z, ++it_r) {
+    laser_pt.x = *it_x;
+    laser_pt.y = *it_y;
+    laser_pt.z = *it_z;
+    laser_pt.ring = *it_r;
+    // skip NaN and INF valued points
+    if (pcl_isfinite(laser_pt.x) && pcl_isfinite(laser_pt.y) && pcl_isfinite(laser_pt.z)) {
+      pcl_cloud.push_back(laser_pt);
+    }
+    else
+      continue;
+  }
+}
+
+inline float squaredDist(Velodyne::Point* a, Velodyne::Point*b){ return pow(a->x - b->x, 2) + pow(a->y - b->y, 2) + pow(a->z - b->z, 2);}
+
+void calculateDistanceFromEachOther(const vector<Velodyne::Point*>& v, int& i1, int& i2)
+{
+  float maxdist = 0;
+  float d = 0;
+  for (int i=0; i<v.size() - 1;i++)
+  {
+    for(int j=i+1;j<v.size();j++)
+    {
+      d = squaredDist(v[i],v[j]);
+      if (d > maxdist)
+      {
+        maxdist = d;
+        i1 = i;
+        i2 = j;
+      }
+    }
+  }
+}
+
 
 void callback(const PointCloud2::ConstPtr& laser_cloud){
 
@@ -86,7 +132,7 @@ void callback(const PointCloud2::ConstPtr& laser_cloud){
 
   clouds_proc_++;
 
-  fromROSMsg(*laser_cloud, *velocloud);
+  readCloudToMsg(*laser_cloud, *velocloud);
 
   Velodyne::addRange(*velocloud); // For latter computation of edge detection
 
@@ -108,8 +154,8 @@ void callback(const PointCloud2::ConstPtr& laser_cloud){
 
   pcl::SACSegmentation<Velodyne::Point> plane_segmentation;
   plane_segmentation.setModelType (pcl::SACMODEL_PARALLEL_PLANE);
-  plane_segmentation.setDistanceThreshold (0.01);
-  plane_segmentation.setMethodType (pcl::SAC_RANSAC);
+  plane_segmentation.setDistanceThreshold (plane_distance_threshold_);
+  plane_segmentation.setMethodType (pcl::SAC_PROSAC);
   plane_segmentation.setAxis(Eigen::Vector3f(axis_[0], axis_[1], axis_[2]));
   plane_segmentation.setEpsAngle (angle_threshold_);
   plane_segmentation.setOptimizeCoefficients (true);
@@ -122,6 +168,12 @@ void callback(const PointCloud2::ConstPtr& laser_cloud){
     ROS_WARN("[Laser] Could not estimate a planar model for the given dataset.");
     return;
   }
+  pcl::PointCloud<Velodyne::Point> inliers_filtered;
+  pcl::copyPointCloud<Velodyne::Point>(*velo_filtered, inliers->indices, inliers_filtered);
+  sensor_msgs::PointCloud2 inliers_ros;
+  pcl::toROSMsg(inliers_filtered, inliers_ros);
+  inliers_ros.header = laser_cloud->header;
+  inliers_pub.publish(inliers_ros);
 
   // Copy coefficients to proper object for further filtering
   Eigen::VectorXf coefficients_v(4);
@@ -158,12 +210,20 @@ void callback(const PointCloud2::ConstPtr& laser_cloud){
     ROS_WARN("[Laser] Could not detect pattern edges.");
     return;
   }
+  sensor_msgs::PointCloud2 edges_ros;
+  pcl::toROSMsg(*edges_cloud, edges_ros);
+  edges_ros.header = laser_cloud->header;
+  edges_cloud_pub.publish(edges_ros);
 
   // Get points belonging to plane in pattern pointcloud
   pcl::SampleConsensusModelPlane<Velodyne::Point>::Ptr dit (new pcl::SampleConsensusModelPlane<Velodyne::Point> (edges_cloud));
   std::vector<int> inliers2;
-  dit -> selectWithinDistance (coefficients_v, .05, inliers2); // 0.1
+  dit -> selectWithinDistance (coefficients_v, plane_distance_threshold_, inliers2); // 0.1
   pcl::copyPointCloud<Velodyne::Point>(*edges_cloud, inliers2, *pattern_cloud);
+  sensor_msgs::PointCloud2 pattern_ros;
+  pcl::toROSMsg(*pattern_cloud, pattern_ros);
+  pattern_ros.header = laser_cloud->header;
+  pattern_pub.publish(pattern_ros);
 
   // Remove kps not belonging to circles by coords
   pcl::PointCloud<pcl::PointXYZ>::Ptr circles_cloud(new pcl::PointCloud<pcl::PointXYZ>);
@@ -174,9 +234,16 @@ void callback(const PointCloud2::ConstPtr& laser_cloud){
       ring->clear();
     }else{ // Remove first and last points in ring
       ringsWithCircle++;
-      ring->erase(ring->begin());
-      ring->pop_back();
+      int i = -1; int j = -1;
+      calculateDistanceFromEachOther(*ring, i, j);
+      if (i < 0 || j <= i)
+      {
+        ROS_WARN("Could not find points farthest apart in ring.");
+        return;
+      }
 
+      ring->erase(ring->begin() + j);
+      ring->erase(ring->begin() + i);
       for (vector<Velodyne::Point*>::iterator pt = ring->begin(); pt < ring->end(); pt++){
         // Velodyne specific info no longer needed for calibration
         // so standard point is used from now on
@@ -197,7 +264,7 @@ void callback(const PointCloud2::ConstPtr& laser_cloud){
   sensor_msgs::PointCloud2 velocloud_ros2;
   pcl::toROSMsg(*circles_cloud, velocloud_ros2);
   velocloud_ros2.header = laser_cloud->header;
-  pattern_pub.publish(velocloud_ros2);
+  pattern_pub2.publish(velocloud_ros2);
 
   // Rotate cloud to face pattern plane
   pcl::PointCloud<pcl::PointXYZ>::Ptr xy_cloud(new pcl::PointCloud<pcl::PointXYZ>);
@@ -442,6 +509,8 @@ void param_callback(velo2cam_calibration::LaserConfig &config, uint32_t level){
   ROS_INFO("New minimum distance between centroids: %f", centroid_distance_min_);
   centroid_distance_max_ = config.centroid_distance_max;
   ROS_INFO("New maximum distance between centroids: %f", centroid_distance_max_);
+  plane_distance_threshold_ = config.plane_distance_threshold;
+  ROS_INFO("New plane distance threshold: %f", plane_distance_threshold_);
 }
 
 int main(int argc, char **argv){
@@ -450,11 +519,13 @@ int main(int argc, char **argv){
   ros::Subscriber sub = nh_.subscribe ("cloud1", 1, callback);
 
   range_pub = nh_.advertise<PointCloud2> ("range_filtered_velo", 1);
-  pattern_pub = nh_.advertise<PointCloud2> ("pattern_circles", 1);
+  pattern_pub2 = nh_.advertise<PointCloud2> ("pattern_circles", 1);
   auxpoint_pub = nh_.advertise<PointCloud2> ("rotated_pattern", 1);
   cumulative_pub = nh_.advertise<PointCloud2> ("cumulative_cloud", 1);
+  edges_cloud_pub = nh_.advertise<PointCloud2> ("edges_cloud", 1);
+  inliers_pub = nh_.advertise<PointCloud2> ("inliers_cloud", 1);
   centers_pub = nh_.advertise<velo2cam_calibration::ClusterCentroids> ("centers_cloud", 1);
-
+  pattern_pub = nh_.advertise<PointCloud2> ("pattern_cloud", 1);
   debug_pub = nh_.advertise<PointCloud2> ("debug", 1);
 
   coeff_pub = nh_.advertise<pcl_msgs::ModelCoefficients> ("plane_model", 1);
