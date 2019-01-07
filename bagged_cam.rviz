@@ -6,6 +6,8 @@ Panels:
       Expanded:
         - /Global Options1
         - /Status1
+        - /PointCloud23
+        - /PointCloud23/Status1
       Splitter Ratio: 0.5
     Tree Height: 643
   - Class: rviz/Selection
@@ -83,12 +85,6 @@ Visualization Manager:
       Frame Timeout: 15
       Frames:
         All Enabled: true
-        stereo:
-          Value: true
-        stereo_camera:
-          Value: true
-        velodyne:
-          Value: true
       Marker Scale: 1
       Name: TF
       Show Arrows: true
@@ -150,10 +146,10 @@ Visualization Manager:
       Position Transformer: XYZ
       Queue Size: 10
       Selectable: true
-      Size (Pixels): 6
+      Size (Pixels): 1
       Size (m): 0.00999999978
       Style: Points
-      Topic: /laser_pattern/pattern_circles
+      Topic: /stereo_camera/points2
       Unreliable: false
       Use Fixed Frame: true
       Use rainbow: true
@@ -174,7 +170,7 @@ Visualization Manager:
   Global Options:
     Background Color: 48; 48; 48
     Default Light: true
-    Fixed Frame: demo_model/velodyne_top
+    Fixed Frame: stereo_camera
     Frame Rate: 30
   Name: root
   Tools:
@@ -195,25 +191,25 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 6.0152297
+      Distance: 11.3060179
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.0599999987
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: 0
-        Y: 0
-        Z: 0
+        X: -0.889207542
+        Y: 1.05981946
+        Z: 0.838395
       Focal Shape Fixed Size: false
       Focal Shape Size: 0.0500000007
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.00999999978
-      Pitch: 0.264795572
+      Pitch: 0.729795039
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 0.100414142
+      Yaw: 5.95859861
     Saved: ~
 Window Geometry:
   Displays:

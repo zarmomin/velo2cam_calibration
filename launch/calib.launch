@@ -1,0 +1,14 @@
+<launch>
+  <param name="use_sim_time" value="true" />
+  <arg name="lidar_points" default="/demo_model/velodyne_points" />
+
+  <node pkg="velo2cam_calibration" type="velo2cam_calibration" name="velo2cam_claib" output="screen">
+    <remap from="~cloud1" to="/laser_pattern/centers_cloud"/>
+    <remap from="~cloud2" to="/stereo_pattern/centers_cloud"/>
+    <param name="radius" value="0.12"/>
+    <param name="centers_distance" value="0.3"/>
+    <param name="sync_iterations" value="false"/>
+    <param name="display_debug_msg" value="true"/>
+    <param name="camera_ns" value="vi_sensor" />
+  </node>
+</launch>
