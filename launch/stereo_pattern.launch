@@ -72,7 +72,7 @@
     <rosparam>
       filter_field_name: z
       filter_limit_min: 0.8
-      filter_limit_max: 3
+      filter_limit_max: 2.5
       filter_limit_negative: False
       max_queue_size: 1
       keep_organized: False
@@ -86,7 +86,7 @@
     <rosparam>
       filter_field_name: z
       filter_limit_min: 0.8
-      filter_limit_max: 3
+      filter_limit_max: 2.5
       filter_limit_negative: False
       max_queue_size: 1
       keep_organized: False

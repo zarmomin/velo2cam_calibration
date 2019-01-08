@@ -7,7 +7,7 @@
   <node pkg="nodelet" type="nodelet" name="pcl_manager" args="manager" output="$(arg stdout)"/>
 
   <node pkg="nodelet" type="nodelet" name="pass_through_z_velo" args="load pcl/PassThrough pcl_manager" output="$(arg stdout)">
-    <remap from="~input" to="/velodyne_points" />
+    <remap from="~input" to="/lidar_model/velodyne_points" />
     <remap from="~output" to="/velodyne/z_filtered" />
     <rosparam>
       filter_field_name: y
@@ -40,7 +40,7 @@
       angle_threshold: 0.55
       circle_radius: 0.12
       passthrough_radius_min: 1.0
-      passthrough_radius_max: 6.0
+      passthrough_radius_max: 2.5
     </rosparam>
   </node>
 
