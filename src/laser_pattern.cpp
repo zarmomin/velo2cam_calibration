@@ -495,13 +495,13 @@ void callback(const PointCloud2::ConstPtr& laser_cloud){
 
 void param_callback(velo2cam_calibration::LaserConfig &config, uint32_t level){
   passthrough_radius_min_ = config.passthrough_radius_min;
-  ROS_INFO("[Laser] New passthrough_radius_min_ threshold: %f", passthrough_radius_min_);
+  ROS_INFO("[Laser] New minimum passthrough radius: %f", passthrough_radius_min_);
   passthrough_radius_max_ = config.passthrough_radius_max;
-  ROS_INFO("[Laser] New passthrough_radius_max_ threshold: %f", passthrough_radius_max_);
+  ROS_INFO("[Laser] New maximum passthrough radius: %f", passthrough_radius_max_);
   circle_radius_ = config.circle_radius;
-  ROS_INFO("New pattern circle radius: %f", circle_radius_);
+  ROS_INFO("[Laser] New pattern circle radius: %f", circle_radius_);
   circle_radius_threshold_ = config.circle_radius_threshold;
-  ROS_INFO("[Laser] New pattern circle radius: %f", circle_radius_threshold_);
+  ROS_INFO("[Laser] New pattern circle radius threshold: %f", circle_radius_threshold_);
   axis_[0] = config.x;
   axis_[1] = config.y;
   axis_[2] = config.z;
@@ -511,7 +511,7 @@ void param_callback(velo2cam_calibration::LaserConfig &config, uint32_t level){
   centroid_distance_min_ = config.centroid_distance_min;
   ROS_INFO("[Laser] New minimum distance between centroids: %f", centroid_distance_min_);
   centroid_distance_max_ = config.centroid_distance_max;
-  ROS_INFO("[Laser]New maximum distance between centroids: %f", centroid_distance_max_);
+  ROS_INFO("[Laser] New maximum distance between centroids: %f", centroid_distance_max_);
   plane_distance_threshold_ = config.plane_distance_threshold;
   ROS_INFO("[Laser] New plane distance threshold: %f", plane_distance_threshold_);
 }
