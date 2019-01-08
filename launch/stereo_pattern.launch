@@ -3,6 +3,10 @@
   <arg name="stdout" default="screen" />
   <arg name="camera_ns" default="stereo_camera"/>
   <arg name="image_topic_name" default="image_rect_color"/>
+  <arg name="expected_pattern_dist_min" default="1.0" />
+  <arg name="expected_pattern_dist_max" default="3.0" />
+  <arg name="circle_radius" default="0.12" />
+
   <!-- Full disparity to pointcloud -->
   <group ns="$(arg camera_ns)">
     <!-- Manager + nodelet -->
@@ -68,32 +72,32 @@
   <!-- PCL generic nodelet manager -->
   <node pkg="nodelet" type="nodelet" name="stereo_pcl_manager" args="manager" output="$(arg stdout)"/>
 
-  <!-- Masked cloud pass through -->
+  <!-- Masked cloud pass through. Filters points along z-axis of camera frame to detect the calibration pattern plane -->
   <node pkg="nodelet" type="nodelet" name="edges_pass_through_z" args="load pcl/PassThrough stereo_pcl_manager" output="$(arg stdout)">
     <remap from="~input" to="/$(arg camera_ns)/edge_points2" />
     <remap from="~output" to="/$(arg camera_ns)/edge_z_filtered_cloud" />
     <rosparam>
       filter_field_name: z
-      filter_limit_min: 0
-      filter_limit_max: 3
       filter_limit_negative: False
       max_queue_size: 1
       keep_organized: False
     </rosparam>
+    <rosparam param="filter_limit_min" subst_value="True">$(arg expected_pattern_dist_min)</rosparam>
+    <rosparam param="filter_limit_max" subst_value="True">$(arg expected_pattern_dist_max)</rosparam>
   </node>
 
-  <!-- Full cloud pass through -->
+  <!-- Full cloud pass through. Filters points along z-axis of camera frame to detect the calibration pattern plane -->
   <node pkg="nodelet" type="nodelet" name="full_pass_through_z" args="load pcl/PassThrough stereo_pcl_manager" output="$(arg stdout)">
     <remap from="~input" to="/$(arg camera_ns)/points2" />
     <remap from="~output" to="/$(arg camera_ns)/z_filtered_cloud" />
     <rosparam>
       filter_field_name: z
-      filter_limit_min: 0
-      filter_limit_max: 3
       filter_limit_negative: False
       max_queue_size: 1
       keep_organized: False
     </rosparam>
+    <rosparam param="filter_limit_min" subst_value="True">$(arg expected_pattern_dist_min)</rosparam>
+    <rosparam param="filter_limit_max" subst_value="True">$(arg expected_pattern_dist_max)</rosparam>
   </node>
 
   <!-- Plane finding on the masked cloud -->
@@ -122,9 +126,13 @@
     <remap from="~cam_plane_coeffs" to="/planar_segmentation/model"/>
     <param name="~min_line_inliers" value="600"/>
     <param name="~min_plane_normal_z" value="0.8"/>
-    <param name="~line_threshold" value="0.02"/>
     <param name="~plane_distance_inliers" value="0.1"/>
     <param name="~min_border_x" value="0.99"/>
+    <rosparam>
+      line_threshold: 0.02
+      circle_threshold: 0.01
+    </rosparam>
+    <rosparam param="circle_radius" subst_value="True">$(arg circle_radius)</rosparam>
   </node>
 
   <!-- Extract circles cloud -->

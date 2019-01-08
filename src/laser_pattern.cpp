@@ -64,11 +64,12 @@ using namespace sensor_msgs;
 ros::Publisher cumulative_pub, centers_pub, pattern_pub2, range_pub,
                coeff_pub, aux_pub, auxpoint_pub, debug_pub, edges_cloud_pub, inliers_pub, pattern_pub;
 int nFrames; // Used for resetting center computation
+int n_rings;
 pcl::PointCloud<pcl::PointXYZ>::Ptr cumulative_cloud;
 
 // Dynamic parameters
 double plane_distance_threshold_;
-double passthrough_radius_min_, passthrough_radius_max_, circle_radius_,
+double passthrough_radius_min_, passthrough_radius_max_, circle_radius_, circle_radius_threshold_,
        centroid_distance_min_, centroid_distance_max_;
 Eigen::Vector3f axis_;
 double angle_threshold_;
@@ -183,7 +184,7 @@ void callback(const PointCloud2::ConstPtr& laser_cloud){
   coefficients_v(3) = coefficients->values[3];
 
   // Get edges points by range
-  vector<vector<Velodyne::Point*> > rings = Velodyne::getRings(*velocloud);
+  vector<vector<Velodyne::Point*> > rings = Velodyne::getRings(*velocloud, n_rings);
   for (vector<vector<Velodyne::Point*> >::iterator ring = rings.begin(); ring < rings.end(); ring++){
     Velodyne::Point *prev, *succ;
     if (ring->empty()) continue;
@@ -227,7 +228,7 @@ void callback(const PointCloud2::ConstPtr& laser_cloud){
 
   // Remove kps not belonging to circles by coords
   pcl::PointCloud<pcl::PointXYZ>::Ptr circles_cloud(new pcl::PointCloud<pcl::PointXYZ>);
-  vector<vector<Velodyne::Point*> > rings2 = Velodyne::getRings(*pattern_cloud);
+  vector<vector<Velodyne::Point*> > rings2 = Velodyne::getRings(*pattern_cloud, n_rings);
   int ringsWithCircle = 0;
   for (vector<vector<Velodyne::Point*> >::iterator ring = rings2.begin(); ring < rings2.end(); ring++){
     if(ring->size() < 4){
@@ -305,7 +306,7 @@ void callback(const PointCloud2::ConstPtr& laser_cloud){
   pcl::EuclideanClusterExtraction<pcl::PointXYZ> euclidean_cluster;
   euclidean_cluster.setClusterTolerance (0.55);
   euclidean_cluster.setMinClusterSize (12);
-  euclidean_cluster.setMaxClusterSize (RINGS_COUNT*4);
+  euclidean_cluster.setMaxClusterSize (n_rings*4);
   euclidean_cluster.setSearchMethod (tree);
   euclidean_cluster.setInputCloud (xy_cloud);
   euclidean_cluster.extract (cluster_indices);
@@ -333,11 +334,11 @@ void callback(const PointCloud2::ConstPtr& laser_cloud){
   // Ransac settings for circle detecstion
   pcl::SACSegmentation<pcl::PointXYZ> circle_segmentation;
   circle_segmentation.setModelType (pcl::SACMODEL_CIRCLE2D);
-  circle_segmentation.setDistanceThreshold (0.04);
+  circle_segmentation.setDistanceThreshold (2.0 * circle_radius_threshold_);
   circle_segmentation.setMethodType (pcl::SAC_RANSAC);
   circle_segmentation.setOptimizeCoefficients (true);
   circle_segmentation.setMaxIterations(1000);
-  circle_segmentation.setRadiusLimits(circle_radius_- 0.02, circle_radius_+ 0.02);
+  circle_segmentation.setRadiusLimits(circle_radius_- circle_radius_threshold_, circle_radius_+ circle_radius_threshold_);
 
   pcl::PointCloud<pcl::PointXYZ>::Ptr copy_cloud(new pcl::PointCloud<pcl::PointXYZ>); // Used for removing inliers
   pcl::copyPointCloud<pcl::PointXYZ>(*xy_cloud, *copy_cloud);
@@ -494,23 +495,25 @@ void callback(const PointCloud2::ConstPtr& laser_cloud){
 
 void param_callback(velo2cam_calibration::LaserConfig &config, uint32_t level){
   passthrough_radius_min_ = config.passthrough_radius_min;
-  ROS_INFO("New passthrough_radius_min_ threshold: %f", passthrough_radius_min_);
+  ROS_INFO("[Laser] New passthrough_radius_min_ threshold: %f", passthrough_radius_min_);
   passthrough_radius_max_ = config.passthrough_radius_max;
-  ROS_INFO("New passthrough_radius_max_ threshold: %f", passthrough_radius_max_);
+  ROS_INFO("[Laser] New passthrough_radius_max_ threshold: %f", passthrough_radius_max_);
   circle_radius_ = config.circle_radius;
   ROS_INFO("New pattern circle radius: %f", circle_radius_);
+  circle_radius_threshold_ = config.circle_radius_threshold;
+  ROS_INFO("[Laser] New pattern circle radius: %f", circle_radius_threshold_);
   axis_[0] = config.x;
   axis_[1] = config.y;
   axis_[2] = config.z;
-  ROS_INFO("New normal axis for plane segmentation: %f, %f, %f", axis_[0], axis_[1], axis_[2]);
+  ROS_INFO("[Laser] New normal axis for plane segmentation: %f, %f, %f", axis_[0], axis_[1], axis_[2]);
   angle_threshold_ = config.angle_threshold;
-  ROS_INFO("New angle threshold: %f", angle_threshold_);
+  ROS_INFO("[Laser] New angle threshold: %f", angle_threshold_);
   centroid_distance_min_ = config.centroid_distance_min;
-  ROS_INFO("New minimum distance between centroids: %f", centroid_distance_min_);
+  ROS_INFO("[Laser] New minimum distance between centroids: %f", centroid_distance_min_);
   centroid_distance_max_ = config.centroid_distance_max;
-  ROS_INFO("New maximum distance between centroids: %f", centroid_distance_max_);
+  ROS_INFO("[Laser]New maximum distance between centroids: %f", centroid_distance_max_);
   plane_distance_threshold_ = config.plane_distance_threshold;
-  ROS_INFO("New plane distance threshold: %f", plane_distance_threshold_);
+  ROS_INFO("[Laser] New plane distance threshold: %f", plane_distance_threshold_);
 }
 
 int main(int argc, char **argv){
@@ -532,6 +535,7 @@ int main(int argc, char **argv){
 
   nh_.param("cluster_size", cluster_size_, 0.02);
   nh_.param("min_centers_found", min_centers_found_, 4);
+  nh_.param("n_rings", n_rings, 16);
 
   nFrames = 0;
   cumulative_cloud = pcl::PointCloud<pcl::PointXYZ>::Ptr(new pcl::PointCloud<pcl::PointXYZ>);

@@ -50,6 +50,7 @@ using namespace sensor_msgs;
 int nFrames;
 int images_proc_=0, images_used_=0;
 
+double circle_radius_;
 double circle_threshold_;
 double line_threshold_;
 double min_plane_normal_z_;
@@ -59,7 +60,6 @@ double min_distance_between_borders_x_;
 double min_distance_between_borders_y_;
 double border_distance_inliers_;
 int min_line_inliers_;
-double cluster_size_;
 int min_centers_found_;
 
 ros::Publisher inliers_pub;
@@ -283,11 +283,11 @@ void callback(const PointCloud2::ConstPtr& camera_cloud,
   pcl::SACSegmentation<pcl::PointXYZ> seg;
 
   seg.setModelType (pcl::SACMODEL_CIRCLE2D);
-  seg.setDistanceThreshold (circle_threshold_);
+  seg.setDistanceThreshold (2.0 * circle_threshold_);
   seg.setMethodType (pcl::SAC_RANSAC);
   seg.setOptimizeCoefficients (true);
   seg.setMaxIterations(1000);
-  seg.setRadiusLimits(0.11,0.13);
+  seg.setRadiusLimits(circle_radius_ - circle_threshold_, circle_radius_ + circle_threshold_);
 
   pcl::PointCloud<pcl::PointXYZ>::Ptr circle_cloud(new pcl::PointCloud<pcl::PointXYZ>);
 
@@ -406,9 +406,11 @@ void callback(const PointCloud2::ConstPtr& camera_cloud,
 
 void param_callback(velo2cam_calibration::CameraConfig &config, uint32_t level){
   circle_threshold_ = config.circle_threshold;
-  ROS_INFO("New circle threshold: %f", circle_threshold_);
+  ROS_INFO("[Camera] New circle threshold: %f", circle_threshold_);
+  circle_radius_ = config.circle_radius;
+  ROS_INFO("[Camera] New circle radius: %f", circle_radius_);
   line_threshold_ = config.line_threshold;
-  ROS_INFO("New line threshold: %f", line_threshold_);
+  ROS_INFO("[Camera] New line threshold: %f", line_threshold_);
 }
 
 int main(int argc, char **argv){
@@ -445,7 +447,6 @@ int main(int argc, char **argv){
   nh_.param("min_distance_between_borders_y", min_distance_between_borders_y_, 0.6);
   nh_.param("border_distance_inliers", border_distance_inliers_, 0.05);
   nh_.param("min_line_inliers", min_line_inliers_, 1200); //TODO: Adapt to the distance to the plane
-  nh_.param("cluster_size", cluster_size_, 0.02);
   nh_.param("min_centers_found", min_centers_found_, 4);
 
   dynamic_reconfigure::Server<velo2cam_calibration::CameraConfig> server;

@@ -75,7 +75,7 @@ ros::Publisher cloud_pub;
 cv::Mat img_out;
 std::string target_frame, source_frame;
 bool listen_to_tf_, save_to_file_;
-int step_;
+int step_, n_rings;
 std::ofstream savefile;
 
 typedef struct {
@@ -111,7 +111,7 @@ COLOUR GetColour(double v,double vmin,double vmax)
 }
 
 void edges_pointcloud(pcl::PointCloud<Velodyne::Point>::Ptr pc){
-  std::vector<std::vector<Velodyne::Point*> > rings = Velodyne::getRings(*pc);
+  std::vector<std::vector<Velodyne::Point*> > rings = Velodyne::getRings(*pc, n_rings);
   for (std::vector<std::vector<Velodyne::Point*> >::iterator ring = rings.begin(); ring < rings.end(); ring++){
     Velodyne::Point *prev, *succ;
     if (ring->empty()) continue;
@@ -556,6 +556,7 @@ int main(int argc, char **argv){
   nh_.param<std::string>("source_frame", source_frame, "/velodyne");
   nh_.param<bool>("listen_to_tf", listen_to_tf_, true);
   nh_.param<bool>("save_to_file", save_to_file_, true);
+  nh_.param<int>("n_rings", n_rings, 16);
 
   laserReceived = false;
   cameraReceived = false;

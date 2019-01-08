@@ -2,6 +2,12 @@
 
   <arg name="stdout" default="screen" />
   <arg name="lidar_points" default="/velodyne_points" />
+  <arg name="circle_radius" default="0.12" />
+  <arg name="centroid_distance_min" default="0.15" />
+  <arg name="centroid_distance_max" default="0.25" />
+  <arg name="expected_pattern_dist_min" default="1.0" />
+  <arg name="expected_pattern_dist_max" default="3.0" />
+
   <!-- PCL PREPROCESSING -->
   <!-- PCL nodelet manager -->
   <node pkg="nodelet" type="nodelet" name="pcl_manager" args="manager" output="$(arg stdout)"/>
@@ -38,11 +44,13 @@
       z: 1
       angle_threshold: 0.8
       plane_distance_threshold: 0.2
-      circle_radius: 0.12
-      <!--lower and upper expected limit of the pattern in lidar-range-->
-      passthrough_radius_min: 0.8
-      passthrough_radius_max: 2.5
+      circle_radius_threshold: 0.02
     </rosparam>
+    <rosparam param="passthrough_radius_min" subst_value="True">$(arg expected_pattern_dist_min)</rosparam>
+    <rosparam param="passthrough_radius_max" subst_value="True">$(arg expected_pattern_dist_max)</rosparam>
+    <rosparam param="centroid_distance_min" subst_value="True">$(arg centroid_distance_min)</rosparam>
+    <rosparam param="centroid_distance_max" subst_value="True">$(arg centroid_distance_max)</rosparam>
+    <rosparam param="circle_radius" subst_value="True">$(arg circle_radius)</rosparam>
   </group>
 
   <node pkg="velo2cam_calibration" type="laser_pattern" name="laser_pattern" output="screen">
