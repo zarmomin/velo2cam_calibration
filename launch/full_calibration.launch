@@ -1,4 +1,8 @@
 <launch>
+  <param name="use_sim_time" value="true" />
+  <arg name="bagfile" default="/home/nico/Desktop/1_trans_0.bag" />
+
+  <node pkg="rosbag" type="play" name="player" output="screen" args="--clock --pause --loop $(arg bagfile)"/>
   <include file="$(find velo2cam_calibration)/launch/stereo_pattern.launch" />
   <include file="$(find velo2cam_calibration)/launch/laser_pattern.launch" />
   <include file="$(find velo2cam_calibration)/launch/velo2cam_calibration.launch" />
