@@ -42,8 +42,8 @@
       x: 0
       y: 0
       z: 1
-      angle_threshold: 0.8
-      plane_distance_threshold: 0.2
+      angle_threshold: 0.6
+      plane_distance_threshold: 0.3
       circle_radius_threshold: 0.02
     </rosparam>
     <rosparam param="passthrough_radius_min" subst_value="True">$(arg expected_pattern_dist_min)</rosparam>
