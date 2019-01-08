@@ -5,8 +5,8 @@
   <arg name="circle_radius" default="0.12" />
   <arg name="centroid_distance_min" default="0.15" />
   <arg name="centroid_distance_max" default="0.25" />
-  <arg name="expected_pattern_dist_min" default="1.0" />
-  <arg name="expected_pattern_dist_max" default="3.0" />
+  <arg name="expected_pattern_dist_min" default="0.5" />
+  <arg name="expected_pattern_dist_max" default="2.5" />
 
   <!-- PCL PREPROCESSING -->
   <!-- PCL nodelet manager -->
@@ -42,8 +42,8 @@
       x: 0
       y: 0
       z: 1
-      angle_threshold: 0.6
-      plane_distance_threshold: 0.3
+      angle_threshold: 0.55
+      plane_distance_threshold: 0.05
       circle_radius_threshold: 0.02
     </rosparam>
     <rosparam param="passthrough_radius_min" subst_value="True">$(arg expected_pattern_dist_min)</rosparam>
