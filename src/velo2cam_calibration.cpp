@@ -63,7 +63,8 @@ ros::Publisher aux_pub, aux2_pub;
 ros::Publisher t_pub;
 ros::Publisher clusters_c, clusters_l;
 int nFrames;
-bool laserReceived, cameraReceived;
+bool laserReceived, cameraReceived, debug_me;
+std::string camera_ns;
 
 pcl::PointCloud<pcl::PointXYZ>::Ptr laser_cloud, camera_cloud;
 pcl::PointCloud<pcl::PointXYZI>::Ptr ilaser_cloud, icamera_cloud;
@@ -100,7 +101,7 @@ const std::string currentDateTime() {
 }
 
 void calibrateExtrinsics(int seek_iter = -1){
-  // ROS_INFO("Hey man, keep calm... I'm calibrating your sensors...");
+  ROS_INFO("Hey man, keep calm... I'm calibrating your sensors...");
 
   std::vector<pcl::PointXYZ> local_lv, local_cv;
   pcl::PointCloud<pcl::PointXYZ>::Ptr local_laser_cloud, local_camera_cloud;
@@ -109,8 +110,8 @@ void calibrateExtrinsics(int seek_iter = -1){
   int used_stereo, used_laser;
 
   if (seek_iter>0){
-    if(DEBUG) ROS_INFO("Seeking %d iterations", seek_iter);
-    if(DEBUG) ROS_INFO("Last cam: %d, last laser: %d", std::get<0>(cam_buffer.back()),std::get<0>(laser_buffer.back()));
+    if(debug_me) ROS_INFO("Seeking %d iterations", seek_iter);
+    if(debug_me) ROS_INFO("Last cam: %d, last laser: %d", std::get<0>(cam_buffer.back()),std::get<0>(laser_buffer.back()));
     auto it = std::find_if(cam_buffer.begin(), cam_buffer.end(), [&seek_iter](const std::tuple<int,int,pcl::PointCloud<pcl::PointXYZ>, std::vector<pcl::PointXYZ> >& e) {return std::get<0>(e) == seek_iter;});
     if (it == cam_buffer.end()) {
       ROS_WARN("Could not sync cam");
@@ -199,8 +200,8 @@ void calibrateExtrinsics(int seek_iter = -1){
   0, 0, 1, x[2],
   0, 0, 0, 1;
 
-  if(DEBUG) ROS_INFO("Step 1: Translation");
-  if(DEBUG) cout << Tm << endl;
+  if(debug_me) ROS_INFO("Step 1: Translation");
+  if(debug_me) cout << Tm << endl;
 
   pcl::PointCloud<pcl::PointXYZ>::Ptr translated_pc (new pcl::PointCloud<pcl::PointXYZ> ());
   pcl::transformPointCloud(*local_camera_cloud, *translated_pc, Tm);
@@ -217,13 +218,13 @@ void calibrateExtrinsics(int seek_iter = -1){
   icp.setMaxCorrespondenceDistance(0.2);
   icp.setMaximumIterations(1000);
   if (icp.hasConverged()){
-    if(DEBUG) ROS_INFO("ICP Converged. Score: %lf", icp.getFitnessScore());
+    if(debug_me) ROS_INFO("ICP Converged. Score: %lf", icp.getFitnessScore());
   }else{
     ROS_WARN("ICP failed to converge");
     return;
   }
-  if(DEBUG) ROS_INFO("Step 2. ICP Transformation:");
-  if(DEBUG) cout << icp.getFinalTransformation() << std::endl;
+  if(debug_me) ROS_INFO("Step 2. ICP Transformation:");
+  if(debug_me) cout << icp.getFinalTransformation() << std::endl;
 
   Eigen::Matrix4f transformation = icp.getFinalTransformation ();
   Eigen::Matrix4f final_trans = transformation * Tm;
@@ -233,8 +234,8 @@ void calibrateExtrinsics(int seek_iter = -1){
   final_trans(1,0), final_trans(1,1), final_trans(1,2),
   final_trans(2,0), final_trans(2,1), final_trans(2,2));
 
-  if(DEBUG) ROS_INFO("Final Transformation");
-  if(DEBUG) cout << final_trans << endl;
+  if(debug_me) ROS_INFO("Final Transformation");
+  if(debug_me) cout << final_trans << endl;
 
   tf::Quaternion tfqt;
   tf3d.getRotation(tfqt);
@@ -293,7 +294,7 @@ void calibrateExtrinsics(int seek_iter = -1){
 }
 
 void laser_callback(const velo2cam_calibration::ClusterCentroids::ConstPtr velo_centroids){
-  // ROS_INFO("Velodyne pattern ready!");
+  ROS_INFO("Velodyne pattern ready!");
   laserReceived = true;
 
   fromROSMsg(velo_centroids->cloud, *laser_cloud);
@@ -304,10 +305,10 @@ void laser_callback(const velo2cam_calibration::ClusterCentroids::ConstPtr velo_
   laser_buffer.push_back(std::tuple<int,int,pcl::PointCloud<pcl::PointXYZ>, std::vector<pcl::PointXYZ> >(velo_centroids->total_iterations, velo_centroids->cluster_iterations, *laser_cloud,lv));
   laser_count = velo_centroids->total_iterations;
 
-  if(DEBUG) ROS_INFO("[V2C] LASER");
+  if(debug_me) ROS_INFO("[V2C] LASER");
 
   for(vector<pcl::PointXYZ>::iterator it=lv.begin(); it<lv.end(); it++){
-    if (DEBUG) cout << "l" << it - lv.begin() << "="<< "[" << (*it).x << " " << (*it).y << " " << (*it).z << "]" << endl;
+    if (debug_me) cout << "l" << it - lv.begin() << "="<< "[" << (*it).x << " " << (*it).y << " " << (*it).z << "]" << endl;
   }
 
   if (sync_iterations){
@@ -334,7 +335,7 @@ void laser_callback(const velo2cam_calibration::ClusterCentroids::ConstPtr velo_
 }
 
 void stereo_callback(velo2cam_calibration::ClusterCentroids::ConstPtr image_centroids){
-  // if(DEBUG) ROS_INFO("Camera pattern ready!");
+  if(debug_me) ROS_INFO("Camera pattern ready!");
 
 #ifdef TF2
 
@@ -346,8 +347,8 @@ void stereo_callback(velo2cam_calibration::ClusterCentroids::ConstPtr image_cent
   tf2_ros::TransformListener tfListener(tfBuffer);
   geometry_msgs::TransformStamped transformStamped;
   try{
-    transformStamped = tfBuffer.lookupTransform("stereo", "stereo_camera",
-                             ros::Time(0), ros::Duration(20));
+    transformStamped = tfBuffer.lookupTransform("stereo", camera_ns,
+                             ros::Time(0), ros::Duration(5.0));
   }
   catch (tf2::TransformException &ex) {
     ROS_WARN("%s",ex.what());
@@ -366,8 +367,8 @@ void stereo_callback(velo2cam_calibration::ClusterCentroids::ConstPtr image_cent
   tf::TransformListener listener;
   tf::StampedTransform transform;
   try{
-    listener.waitForTransform("stereo", "stereo_camera", ros::Time(0), ros::Duration(20.0));
-    listener.lookupTransform ("stereo", "stereo_camera", ros::Time(0), transform);
+    listener.waitForTransform("stereo", camera_ns, ros::Time(0), ros::Duration(5.0));
+    listener.lookupTransform ("stereo", camera_ns, ros::Time(0), transform);
   }catch (tf::TransformException& ex) {
     ROS_WARN("TF exception:\n%s", ex.what());
     return;
@@ -389,10 +390,10 @@ void stereo_callback(velo2cam_calibration::ClusterCentroids::ConstPtr image_cent
   cam_buffer.push_back(std::tuple<int, int,pcl::PointCloud<pcl::PointXYZ>, std::vector<pcl::PointXYZ> >(image_centroids->total_iterations,image_centroids->cluster_iterations,*camera_cloud,cv));
   cam_count = image_centroids->total_iterations;
 
-  if(DEBUG) ROS_INFO("[V2C] CAMERA");
+  if(debug_me) ROS_INFO("[V2C] CAMERA");
 
   for(vector<pcl::PointXYZ>::iterator it=cv.begin(); it<cv.end(); it++){
-    if (DEBUG) cout << "c" << it - cv.begin() << "="<< "[" << (*it).x << " " << (*it).y << " " << (*it).z << "]"<<endl;
+    if (debug_me) cout << "c" << it - cv.begin() << "="<< "[" << (*it).x << " " << (*it).y << " " << (*it).z << "]"<<endl;
   }
 
   if (sync_iterations){
@@ -410,7 +411,7 @@ void stereo_callback(velo2cam_calibration::ClusterCentroids::ConstPtr image_cent
   }
 
   if(laserReceived && cameraReceived){
-    if(DEBUG) ROS_INFO("[V2C] Calibrating...");
+    if(debug_me) ROS_INFO("[V2C] Calibrating...");
     calibrateExtrinsics();
   }else{
     static tf::TransformBroadcaster br;
@@ -425,8 +426,9 @@ int main(int argc, char **argv){
 
   nh_.param<bool>("sync_iterations", sync_iterations, false);
   nh_.param<bool>("save_to_file", save_to_file_, false);
-  nh_.param<bool>("publish_tf", publish_tf_, true);
-
+  nh_.param<bool>("publish_tf", publish_tf_, false);
+  nh_.param<bool>("display_debug_msg", debug_me, false);
+  nh_.param<std::string>("camera_ns", camera_ns, "stereo_camera");
   static tf::TransformBroadcaster br;
   tf_velodyne_camera = tf::StampedTransform(tf::Transform::getIdentity(), ros::Time::now(), "velodyne", "stereo");
   if (publish_tf_) br.sendTransform(tf_velodyne_camera);
@@ -449,7 +451,7 @@ int main(int argc, char **argv){
     ostringstream os;
     os << getenv("HOME") << "/results_" << currentDateTime() << ".csv" ;
     if (save_to_file_){
-      if(DEBUG) ROS_INFO("Opening %s", os.str().c_str());
+      if(debug_me) ROS_INFO("Opening %s", os.str().c_str());
       savefile.open (os.str().c_str());
       savefile << "it, x, y, z, r, p, y, used_l, used_c" << endl;
     }
@@ -527,7 +529,7 @@ int main(int argc, char **argv){
   doc.SaveFile(path);
   doc.SaveFile(backuppath);
 
-  if(DEBUG) cout << "Calibration process finished." << endl;
+  if(debug_me) cout << "Calibration process finished." << endl;
 
   return 0;
 }

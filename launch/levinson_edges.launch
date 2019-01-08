@@ -20,6 +20,7 @@
 
   <node pkg="velo2cam_calibration" type="levinson" name="levinson" output="screen">
     <param name="listen_to_tf" value="false"/>
+    <param name="n_rings" value="16" />
     <remap from="~image" to="/stereo_camera/left/image_rect_color"/>
     <remap from="~camera_info" to="/stereo_camera/left/camera_info"/>
     <remap from="~cloud" to="/velodyne_points"/>
