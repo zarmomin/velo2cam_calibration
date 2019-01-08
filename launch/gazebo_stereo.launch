@@ -18,7 +18,6 @@
     <arg name="centroid_distance_min" value="$(arg centroid_distance_min)" />
     <arg name="centroid_distance_max" value="$(arg centroid_distance_max)" />
     <arg name="circle_radius" value="$(arg circle_radius)"/>
-    <arg name="n_rings" value="64" />
   </include>
 
   <node pkg="velo2cam_calibration" type="velo2cam_calibration" name="velo2cam_calib" output="screen">

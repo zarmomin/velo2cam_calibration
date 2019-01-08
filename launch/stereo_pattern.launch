@@ -7,7 +7,7 @@
   <arg name="circle_radius" default="0.12" />
   <arg name="camera_optical_frame" default="stereo" />
   <arg name="camera_upright_frame" default="stereo_camera" />
-
+  
   <!-- Full disparity to pointcloud -->
   <group ns="$(arg camera_ns)">
     <!-- Manager + nodelet -->

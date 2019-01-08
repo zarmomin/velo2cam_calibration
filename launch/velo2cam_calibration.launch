@@ -2,6 +2,7 @@
   <arg name="camera_optical_frame" default="stereo" />
   <arg name="camera_upright_frame" default="stereo_camera" />
   <arg name="lidar_frame" default="velodyne" />
+  <arg name="n_rings" default="16" />
 
   <node pkg="velo2cam_calibration" type="velo2cam_calibration" name="velo2cam_claib" output="screen">
     <remap from="~cloud1" to="/laser_pattern/centers_cloud"/>
@@ -12,6 +13,6 @@
     <param name="camera_optical_frame" value="$(arg camera_optical_frame)" />
     <param name="camera_upright_frame" value="$(arg camera_upright_frame)" />
     <param name="lidar_frame" value="$(arg lidar_frame)" />
-    <param name="n_rings" value="16" />
+    <param name="n_rings" value="$(arg n_rings)" />
   </node>
 </launch>

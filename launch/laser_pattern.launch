@@ -7,7 +7,7 @@
   <arg name="centroid_distance_max" default="0.25" />
   <arg name="expected_pattern_dist_min" default="0.5" />
   <arg name="expected_pattern_dist_max" default="2.5" />
-
+  <arg name="n_rings" default="16" />
   <!-- PCL PREPROCESSING -->
   <!-- PCL nodelet manager -->
   <node pkg="nodelet" type="nodelet" name="pcl_manager" args="manager" output="$(arg stdout)"/>
@@ -55,6 +55,7 @@
 
   <node pkg="velo2cam_calibration" type="laser_pattern" name="laser_pattern" output="screen">
     <remap from="~cloud1" to="/velodyne/xy_filtered"/>
+    <param name="n_rings" value="$(arg n_rings)" />
   </node>
 
 </launch>
