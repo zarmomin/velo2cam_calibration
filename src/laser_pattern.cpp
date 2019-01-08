@@ -53,7 +53,7 @@
 #include <pcl/registration/icp.h>
 #include <pcl/io/pcd_io.h>
 #include <dynamic_reconfigure/server.h>
-
+#include <sensor_msgs/point_cloud2_iterator.h>
 #include <velo2cam_calibration/LaserConfig.h>
 #include "velo2cam_utils.h"
 #include <velo2cam_calibration/ClusterCentroids.h>
@@ -76,6 +76,49 @@ double cluster_size_;
 int clouds_proc_ = 0, clouds_used_ = 0;
 int min_centers_found_;
 
+void readCloudToMsg(const sensor_msgs::PointCloud2 &cloud, pcl::PointCloud<Velodyne::Point> &pcl_cloud)
+{
+  sensor_msgs::PointCloud2ConstIterator<float> it_x(cloud, "x");
+  sensor_msgs::PointCloud2ConstIterator<float> it_y(cloud, "y");
+  sensor_msgs::PointCloud2ConstIterator<float> it_z(cloud, "z");
+  sensor_msgs::PointCloud2ConstIterator<uint8_t> it_r(cloud, "ring");
+
+  Velodyne::Point laser_pt;
+
+  for (; it_x != it_x.end(); ++it_x, ++it_y, ++it_z, ++it_r) {
+    laser_pt.x = *it_x;
+    laser_pt.y = *it_y;
+    laser_pt.z = *it_z;
+    laser_pt.ring = *it_r;
+    // skip NaN and INF valued points
+    if (pcl_isfinite(laser_pt.x) && pcl_isfinite(laser_pt.y) && pcl_isfinite(laser_pt.z)) {
+      pcl_cloud.push_back(laser_pt);
+    }
+    else
+      continue;
+  }
+}
+inline float squaredDist(Velodyne::Point* a, Velodyne::Point*b){ return pow(a->x - b->x, 2) + pow(a->y - b->y, 2) + pow(a->z - b->z, 2);}
+
+void calculateDistanceFromEachOther(const vector<Velodyne::Point*>& v, int& i1, int& i2)
+{
+  float maxdist = 0;
+  float d = 0;
+  for (int i=0; i<v.size() - 1;i++)
+  {
+    for(int j=i+1;j<v.size();j++)
+    {
+      d = squaredDist(v[i],v[j]);
+      if (d > maxdist)
+      {
+        maxdist = d;
+        i1 = i;
+        i2 = j;
+      }
+    }
+  }
+}
+
 void callback(const PointCloud2::ConstPtr& laser_cloud){
 
   if(DEBUG) ROS_INFO("[Laser] Processing cloud...");
@@ -86,7 +129,7 @@ void callback(const PointCloud2::ConstPtr& laser_cloud){
 
   clouds_proc_++;
 
-  fromROSMsg(*laser_cloud, *velocloud);
+  readCloudToMsg(*laser_cloud, *velocloud);
 
   Velodyne::addRange(*velocloud); // For latter computation of edge detection
 
@@ -174,8 +217,16 @@ void callback(const PointCloud2::ConstPtr& laser_cloud){
       ring->clear();
     }else{ // Remove first and last points in ring
       ringsWithCircle++;
-      ring->erase(ring->begin());
-      ring->pop_back();
+      int i = -1; int j = -1;
+      calculateDistanceFromEachOther(*ring, i, j);
+      if (i < 0 || j <= i)
+      {
+        ROS_WARN("Could not find points farthest apart in ring.");
+        return;
+      }
+
+      ring->erase(ring->begin() + j);
+      ring->erase(ring->begin() + i);
 
       for (vector<Velodyne::Point*>::iterator pt = ring->begin(); pt < ring->end(); pt++){
         // Velodyne specific info no longer needed for calibration
