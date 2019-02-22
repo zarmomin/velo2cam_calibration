@@ -94,6 +94,7 @@ add_executable(pcl_projection src/pcl_projection.cpp)
 add_executable(levinson src/levinson.cpp)
 add_executable(v2c_plane_segmentation src/plane.cpp)
 add_executable(v2c_disp_masker src/disp_masker.cpp)
+add_executable(pcd_stuff src/pcdStuff.cc)
 
 target_compile_options(pcl_projection PRIVATE ${OpenMP_FLAGS})
 
@@ -159,3 +160,9 @@ target_link_libraries(v2c_disp_masker
   ${catkin_LIBRARIES}
   ${OpenCV_LIBRARIES}
 )
+target_link_libraries(pcd_stuff
+        ${catkin_LIBRARIES}
+        ${OpenCV_LIBRARIES}
+        ${PCL_LIBRARIES}
+        )
+

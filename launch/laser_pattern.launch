@@ -7,6 +7,7 @@
   <arg name="centroid_distance_max" default="0.25" />
   <arg name="expected_pattern_dist_min" default="0.5" />
   <arg name="expected_pattern_dist_max" default="2.5" />
+  <arg name="circle_centers_distance" default="0.25" />
   <arg name="n_rings" default="16" />
   <!-- PCL PREPROCESSING -->
   <!-- PCL nodelet manager -->
@@ -17,8 +18,8 @@
     <remap from="~output" to="/velodyne/z_filtered" />
     <rosparam>
       filter_field_name: y
-      filter_limit_min: -100
-      filter_limit_max: 100
+      filter_limit_min: -1.5
+      filter_limit_max: 1
       filter_limit_negative: False
       max_queue_size: 1
       keep_organized: False
@@ -30,9 +31,9 @@
     <remap from="~output" to="/velodyne/xy_filtered" />
     <rosparam>
       filter_field_name: x
-      filter_limit_min: 0
-      filter_limit_max: 100
-      filter_limit_negative: False
+      filter_limit_min: 2.4
+      filter_limit_max: 2.9
+      filter_limit_negative: True
       max_queue_size: 1
       keep_organized: False
     </rosparam>
@@ -46,6 +47,7 @@
       plane_distance_threshold: 0.05
       circle_radius_threshold: 0.02
     </rosparam>
+    <rosparam param="min_distance_between_centers" subst_value="True">$(arg circle_centers_distance)</rosparam>
     <rosparam param="passthrough_radius_min" subst_value="True">$(arg expected_pattern_dist_min)</rosparam>
     <rosparam param="passthrough_radius_max" subst_value="True">$(arg expected_pattern_dist_max)</rosparam>
     <rosparam param="centroid_distance_min" subst_value="True">$(arg centroid_distance_min)</rosparam>
@@ -56,6 +58,7 @@
   <node pkg="velo2cam_calibration" type="laser_pattern" name="laser_pattern" output="screen">
     <remap from="~cloud1" to="/velodyne/xy_filtered"/>
     <param name="n_rings" value="$(arg n_rings)" />
+    <param name="min_centers_found" value="1" />
   </node>
 
 </launch>

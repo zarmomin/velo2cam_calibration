@@ -1,33 +1,40 @@
 <launch>
   <param name="use_sim_time" value="true" />
-  <arg name="bagfile" default="/home/nico/lidar-cam-config/os1-16-2019-01-05-16-07-42.bag" />
-  <arg name="lidar_points" default="/demo_model/velodyne_points" />
-  <arg name="camera_ns" default="vi_sensor" />
-  <arg name="image_topic_name" default="image_raw" />
-  <arg name="circle_radius" default="0.12" />
-  <arg name="circle_centers_distance" default="0.3" />
-  <arg name="centroid_distance_min" default="0.15" />
-  <arg name="centroid_distance_max" default="0.25" />
+  <arg name="bagfile" default="/home/nico/2018-12-03/2019-02-20-voliro-calibration/2019-02-20-17-52-02.bag" />
+  <arg name="lidar_points" default="/dragonfly/os1_node/points" />
+  <arg name="camera_ns" default="stereo_camera" />
+  <arg name="image_topic_name" default="image_rect_color" />
+  <arg name="circle_radius" default="0.08" />
+  <arg name="circle_centers_distance" default="0.16" />
+  <arg name="centroid_distance_min" default="0.1" />
+  <arg name="centroid_distance_max" default="0.17" />
   <!-- Rough interval for distance from lidar/camera to the calibration pattern.
   Must exclude any big planar surfaces behind the pattern! -->
-  <arg name="expected_pattern_dist_min" default="1.0" />
-  <arg name="expected_pattern_dist_max" default="3.0" />
+  <arg name="expected_pattern_dist_min" default="2.2" />
+  <arg name="expected_pattern_dist_max" default="2.4" />
 
-  <node pkg="rosbag" type="play" name="player" output="screen" args="--clock --pause --loop $(arg bagfile)"/>
+  <node pkg="rosbag" type="play" name="player" output="screen" args="--clock --pause --loop $(arg bagfile)">
+    <remap from="/cam0/image_raw" to="/stereo_camera/left/image_rect_color" />
+    <remap from="/cam1/image_raw" to="/stereo_camera/right/image_rect_color" />
+  </node>
 
-  <include file="$(find velo2cam_calibration)/launch/stereo_pattern.launch">
+  <!--<include file="$(find velo2cam_calibration)/launch/stereo_pattern.launch">
     <arg name="camera_ns" value="$(arg camera_ns)" />
     <arg name="image_topic_name" value="$(arg image_topic_name)" />
     <arg name="circle_radius" value="$(arg circle_radius)"/>
-  </include>
+  </include>-->
   <include file="$(find velo2cam_calibration)/launch/laser_pattern.launch">
     <arg name="lidar_points" value="$(arg lidar_points)" />
     <arg name="centroid_distance_min" value="$(arg centroid_distance_min)" />
     <arg name="centroid_distance_max" value="$(arg centroid_distance_max)" />
     <arg name="circle_radius" value="$(arg circle_radius)"/>
+    <arg name="n_rings" value="64" />
+    <arg name="expected_pattern_dist_min" value="$(arg expected_pattern_dist_min)" />
+    <arg name="expected_pattern_dist_max" value="$(arg expected_pattern_dist_max)" />
+    <arg name="circle_centers_distance" value="$(arg circle_centers_distance)" />
   </include>
 
-  <node pkg="velo2cam_calibration" type="velo2cam_calibration" name="velo2cam_claib" output="screen">
+  <!--<node pkg="velo2cam_calibration" type="velo2cam_calibration" name="velo2cam_claib" output="screen">
     <remap from="~cloud1" to="/laser_pattern/centers_cloud"/>
     <remap from="~cloud2" to="/stereo_pattern/centers_cloud"/>
     <param name="radius" value="$(arg circle_radius)"/>
@@ -35,7 +42,7 @@
     <param name="sync_iterations" value="false"/>
     <param name="display_debug_msg" value="true"/>
     <param name="camera_ns" value="$(arg camera_ns)" />
-    <param name="n_rings" value="16" />
-  </node>
+    <param name="n_rings" value="64" />
+  </node>-->
   <node pkg="rviz" type="rviz" name="rviz" args="-d $(find velo2cam_calibration)/bagged.rviz" />
 </launch>
